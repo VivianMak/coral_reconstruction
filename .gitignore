@@ -1,6 +1,13 @@
 # Virtual environments
-venv/
-.venv/
-ENV/
+.env
+.venv
 env/
-lib64/
+venv/
+
+# Data
+data_extracted/
+data_raw/
+python-lfp-reader/
+
+# Jupyter notebooks
+.ipynb
