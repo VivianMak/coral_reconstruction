@@ -15,7 +15,7 @@ def get_directories():
     '''Get folders names from data_extracted'''
 
     folder_list = []
-    files = os.listdir("../data_raw/")
+    files = os.listdir("data_raw/")
     for f in files:
         # remove the '.lfp' part 
         folder_list.append(os.path.splitext(f)[0])
@@ -26,7 +26,7 @@ def get_directories():
 def extract_metadata(FILENAME):
     """Extract relevant metadata from .json file"""
 
-    json_path = os.path.join("../data_extracted/", FILENAME, f"{FILENAME}.LFP__lfp_meta.json")
+    json_path = os.path.join("data_extracted/", FILENAME, f"{FILENAME}.LFP__lfp_meta.json")
     print(json_path)
 
     # Load metadata json file
@@ -54,19 +54,19 @@ def extract_metadata(FILENAME):
 def load_depth(metadata, FILENAME):
     """Convert unitless lambda map to metric depth map."""
 
-    depth_path = os.path.join("../data_extracted/", FILENAME, f"{FILENAME}.LFP__{metadata['depth_hash']}.data")
+    depth_path = os.path.join("data_extracted/", FILENAME, f"{FILENAME}.LFP__{metadata['depth_hash']}.data")
     
     # Load binary floats - lambda map
     depth = np.fromfile(depth_path, dtype=np.float32).reshape((metadata["height"], metadata["width"]))
 
 
     # Normalize depth
-    depth_norm = (depth - metadata["min_lambda"]) / (metadata["max_lambda"] - metadata["min_lambda"])
-    return depth_norm
+    # depth_norm = (depth - metadata["min_lambda"]) / (metadata["max_lambda"] - metadata["min_lambda"])
+    # return depth_norm
 
     # # Metric depth
-    # depth_real = (float(metadata["focal_length"]) * depth) / (metadata["lambda_inf"] - depth)
-    # return depth_real
+    depth_real = (float(metadata["focal_length"]) * depth) / (metadata["lambda_inf"] - depth)
+    return depth_real
 
 
 def show_depths(depth_maps, titles, marker=(211,100)):
@@ -81,7 +81,7 @@ def show_depths(depth_maps, titles, marker=(211,100)):
 
     for i, (depth, title) in enumerate(zip(depth_maps, titles)):
         im = axes[i].imshow(depth, cmap="inferno", aspect="auto")
-        axes[i].set_title(f"{title} Depth Map")
+        axes[i].set_title(f"{title} Depth Map (Log100)")
 
         mx, my = marker
         depth_val = depth[my, mx]
@@ -94,7 +94,7 @@ def show_depths(depth_maps, titles, marker=(211,100)):
         axes[j].axis("off")
 
     fig.colorbar(im) #, ax=axes.tolist())
-    plt.title("Normalized Depth Maps")
+    # plt.title("Normalized Depth Maps")
     plt.tight_layout()
     plt.show()
 
@@ -102,7 +102,7 @@ def show_depths(depth_maps, titles, marker=(211,100)):
 def show_jpg(metadata, FILENAME):
     '''Displays the raw jpg image'''
 
-    raw_path = os.path.join("../data_extracted/", FILENAME, f"{FILENAME}.LFP__{metadata['jpg_hash']}.data")
+    raw_path = os.path.join("data_extracted/", FILENAME, f"{FILENAME}.LFP__{metadata['jpg_hash']}.data")
 
     img = Image.open(raw_path)
     plt.figure()
@@ -162,7 +162,7 @@ def main():
 
         depth_norm = load_depth(metadata, f)
 
-        depth_maps.append(depth_norm)
+        depth_maps.append(np.log(depth_norm)/np.log(100))
         titles.append(f)
     
     show_depths(depth_maps, titles)
