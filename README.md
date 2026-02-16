@@ -19,11 +19,6 @@ To structure the usefulness of a light field camera for reconstruction, I will i
 5) Adjust the reconstruction algorithm for it to be useful
 
 
-# CURRENT STATUS
-- working on `src/extract_depths.py`
-- need to figure out the "squashing" of depth values when converting to a metric depth map
-
-
 # Dependencies
 Requires to install the python lpf reader below.
 ### Python LPF Reader
@@ -70,3 +65,5 @@ Project/
 └── requirements.txt
 
 ```
+
+# Dynamic Fusion
