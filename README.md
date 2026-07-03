@@ -7,63 +7,32 @@ Coral reef systems, especially soft corals, are a very vulnerable ecosystem that
 
 This research project aims to answer the question: <u>__“Through scientific experiments and design, can a single light field camera (Lytro Illum) be used for accurate 3D dynamic reconstruction of soft corals?”__</u>
 
-Light field cameras have been prevalent in urban environment applications, however, there seems to be a lack of continuous research using these cameras and in underwater settings. This sensor provides internal depth map properties and refocusing capabilities unlike traditional cameras. The need for a multi-camera system introduces complexity, especially in uncontrollable underwater environments, that may be resolved with just one light field sensor.
+# Decoding Light Fields (LFR)
 
-To structure the usefulness of a light field camera for reconstruction, I will integrate and apply scientific background into my design workflow. This includes focusing on areas like: understanding the optics of water refraction, dynamics of soft body corals, and diversity of species. This initial research will scaffold the reconstruction pipeline from knowing what information to capture, to extracting useful data, to building an accurate representation. The project, then can be broken down into the following challenges:
-1) Capture and extract useful data from lab setup with scientific context, focusing on
-    1) Water optics and the interaction of this sensor through water
-    2) Understanding the dynamic motions of soft corals in response to currents across different species
-2) Build a reconstruction pipeline by reverse engineering what is needed for a dynamic reconstruction
-3) Reconstruct one scene with x timesteps
-4) Compare reconstruction with list of useful metrics
-5) Adjust the reconstruction algorithm for it to be useful
+### Plenopticam
+- https://libraries.io/pypi/plenopticam
+- https://github.com/hahnec/plenopticam
 
-
-# Dependencies
-Requires to install the python lpf reader below.
-### Python LPF Reader
-Follow instructions on this page to install
->https://github.com/behnam/python-lfp-reader/blob/master/README.rst 
-
+```sh
+pip3 install plenopticam
+plenopticam -h
+./decode_lfr.sh
 ```
-$ cd ~/coral_reconstruction/python-lfp-reader/
 ```
-To extract depth maps, raw images, and metadata run the following line.
-
+plenopticam -f LFRDataset/Bee_1.LFR -c LFRDataset/Calibration/caldata-B5144000580.ta
 ```
-$ ./lfp-file.py export ~/path-to-.LFP file
-```
-This will create the following files:
 
-`IMG_0001.LFP_lfp_meta.json`
-`IMG_0001.LFP__1e21bd1fd7ca64a915cf2579359ad5509aa3d6ec.data`
-`IMG_0116.LFP__46512476093ff1d160623fff06bba22991e121d0.data`
+### Output folder contents
 
-Useful note: to know which file is the depth map or raw image, check the `.json` file.
+Results are saved in the folder (`LFRDataExtracted/source_name`), with the following contents:
+
+- **`viewpoints_xxx/`** — sub-aperture (angular view) images, one per virtual viewpoint, plus a view animation GIF
+- **Depth data** — the depth map written by `Write depth data`. *(Check the actual output folder for the exact filename/format — likely a `.png`/`.tiff`/`.pgm` in a `depth_xxx` or similarly named folder or file; confirm and fill in here once you've inspected `Bee_1/`.)*
+- **`refo_xxx/`** — refocused image stack (focal stack) at different focus planes, plus a refocus animation GIF
+- Calibration data derived from the microlens grid analysis (from `Save calibration data`)
+
+> Note: "Potential data loss as directory already exists" appeared twice — PlenoptiCam is warning it's overwriting a prior `Bee_1/` output folder from an earlier run. Back up prior results before re-running if you need to keep them.
 
 
-# Repo Structure
-```
-Project/
-├── data_raw/
-│   ├── IMG_0001.LFP
-│   ├── IMG_0002.LFP
-│   └── IMG_0003.LFP
-├── data_extracted/
-│   ├── IMG_0001/
-│   │   ├── IMG_0001.LFP__lfp_meta.json
-│   │   ├── IMG_0001.LFP__a2f4b.data
-│   ├── IMG_0002/
-│   │   ├── IMG_0002.LFP__lfp_meta.json
-│   │   └── IMG_0002.LFP__c1a7e.data
-│   └── IMG_0003/
-│       ├── IMG_0003.LFP__lfp_meta.json
-│       └── IMG_0003.LFP__b8d2f.data
-├── src/
-│   ├── extract_depths.py
-├── README.md
-└── requirements.txt
-
-```
 
 # Dynamic Fusion
