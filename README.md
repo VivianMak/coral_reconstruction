@@ -7,6 +7,15 @@ Coral reef systems, especially soft corals, are a very vulnerable ecosystem that
 
 This research project aims to answer the question: <u>__“Through scientific experiments and design, can a single light field camera (Lytro Illum) be used for accurate 3D dynamic reconstruction of soft corals?”__</u>
 
+# Datasets
+- http://clim.inria.fr/IllumDatasetLF/index.html
+- http://lightfield.stanford.edu/lfs.html
+- https://plenodb.jpeg.org/
+- https://lightfields.stanford.edu/mvlf/
+- https://plenodb.jpeg.org/lf/epfl/
+- https://marine.acfr.usyd.edu.au/research/plenoptic-imaging/
+    - Researcher - https://scholar.google.com.au/citations?user=MVfxch0AAAAJ&hl=en
+
 # Decoding Light Fields (LFR)
 
 ### Plenopticam
