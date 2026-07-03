@@ -48,7 +48,6 @@ fi
 
 for lfr in "${lfr_files[@]}"; do
     name="$(basename "$lfr" .LFR)"     # e.g. Coral_1
-    src_out="${INPUT_DIR}/${name}"     # where plenopticam writes its output
     dst_out="${OUTPUT_DIR}/${name}"    # where we want it
 
     if [[ -d "$dst_out" && "${FORCE:-0}" != "1" ]]; then
@@ -56,15 +55,31 @@ for lfr in "${lfr_files[@]}"; do
         continue
     fi
 
+    # Snapshot existing dirs in INPUT_DIR so we can spot the one plenopticam creates.
+    before_dirs=("$INPUT_DIR"/*/)
+
     echo "=== Decoding ${name} ==="
     "$PLENOPTICAM" -f "$lfr" -c "$CALIB_TAR"
 
-    if [[ -d "$src_out" ]]; then
+    after_dirs=("$INPUT_DIR"/*/)
+    new_dirs=()
+    for d in "${after_dirs[@]}"; do
+        found=0
+        for b in "${before_dirs[@]}"; do
+            [[ "$d" == "$b" ]] && found=1 && break
+        done
+        [[ "$found" -eq 0 ]] && new_dirs+=("$d")
+    done
+
+    if [[ ${#new_dirs[@]} -eq 1 ]]; then
+        src_out="${new_dirs[0]%/}"
         rm -rf "$dst_out"
         mv "$src_out" "$dst_out"
         echo "Saved -> ${dst_out}"
+    elif [[ ${#new_dirs[@]} -eq 0 ]]; then
+        echo "WARNING: no new output folder appeared in ${INPUT_DIR} for ${name}" >&2
     else
-        echo "WARNING: expected output folder ${src_out} not found" >&2
+        echo "WARNING: multiple new folders appeared for ${name}, not moving: ${new_dirs[*]}" >&2
     fi
 done
 
