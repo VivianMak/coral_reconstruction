@@ -5,9 +5,9 @@ env/
 venv/
 
 # Data
-data_extracted/
-data_raw/
-python-lfp-reader/
+ARCHIVED/
+LFRDataset/
+LFRDatasetExtracted/
 
 # Jupyter notebooks
 .ipynb
