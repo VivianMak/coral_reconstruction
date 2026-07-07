@@ -8,6 +8,7 @@ venv/
 ARCHIVED/
 LFRDataset/
 LFRDatasetExtracted/
+PCDDataset/
 
 # Jupyter notebooks
 .ipynb

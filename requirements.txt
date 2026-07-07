@@ -1,3 +1,5 @@
 numpy==1.26.0
 matplotlib
 Pillow
+plenopticam
+plenoptisign
