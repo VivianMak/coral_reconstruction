@@ -57,7 +57,7 @@ plt.show()
 
 ## SHOWING PLY FILES -----------------------------
 
-import open3d as o3d
-ply_data = o3d.io.read_point_cloud("LFRDatasetExtracted/Bee_1/depth.ply")
-o3d.visualization.draw_geometries([ply_data])
+# import open3d as o3d
+# ply_data = o3d.io.read_point_cloud("LFRDatasetExtracted/Bee_1/depth.ply")
+# o3d.visualization.draw_geometries([ply_data])
 
