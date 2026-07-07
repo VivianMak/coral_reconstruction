@@ -3,80 +3,106 @@ import numpy as np
 
 import open3d as o3d
 
-def view():
-    pcd1 = o3d.io.read_point_cloud("PCDDataset/coral_frame_000.pcd")
-    pcd2 = o3d.io.read_point_cloud("PCDDataset/coral_frame_001.pcd")
+class WarpField():
+
+    def __init__(self, pcd_files):
+        
+        self.pcd_files = []
+        self.read_pcds(pcd_files)
+
+        self.geometries_to_visualize = []
 
 
-    pcd1.paint_uniform_color([1.0, 0.0, 0.0])  # Red
-    pcd2.paint_uniform_color([0.0, 0.0, 1.0])  # Blue
-
-    show = [pcd1, pcd2]
-    o3d.visualization.draw_geometries([pcd1], window_name="Overlayed PCD Comparison")
-
-def view_interactive():
-    # 1. Load your point cloud
-    pcd = o3d.io.read_point_cloud("PCDDataset/coral_frame_000.pcd")
-
-    # 2. Open the interactive editing window
-    vis = o3d.visualization.VisualizerWithEditing()
-    vis.create_window()
-    vis.add_geometry(pcd)
-    vis.run()  # The window will pop up. Press Shift+Left Click to select points.
-    vis.destroy_window()
-
-    # 3. Retrieve the indices of the selected points
-    picked_indices = vis.get_picked_points()
-    print("Selected point indices:", picked_indices)
-
-    # 4. Extract the actual points if needed
-    selected_pcd = pcd.select_by_index(picked_indices)
+    def read_pcds(self, pcd_files):
+        """Convert pcds into readable format"""
+        for item in pcd_files:
+            print(item)
+            self.pcd_files.append(o3d.io.read_point_cloud(item))
 
 
-def draw_sphere():
-    # [Open3D INFO] Picked point #22018 (-0.045, 0.006, 0.11) to add in queue.
-    # [Open3D INFO] Picked point #3565 (-0.0013, -0.046, 0.096) to add in queue
-    p1 = np.array([-0.045, 0.006, 0.11])
-    p2 = np.array([-0.0013, -0.046, 0.096])
-    picked_points = [p1, p2]
+    def draw_sphere(self, selected_idx):
+        """Draw transparent spheres to visualize deformation node."""
+        
+        # overwrite for now
+        p1 = np.array([-0.045, 0.006, 0.11])        #22018 (-0.045, 0.006, 0.11)
+        p2 = np.array([-0.0013, -0.046, 0.096])     #3565 (-0.0013, -0.046, 0.096)
+        selected_idx = [p1, p2]
 
-    # 2. Set up a list to hold the sphere geometries
-    geometries_to_visualize = []
 
-    # 3. Create a sphere for each point
-    sphere_radius = 0.005  # Adjust this depending on your point cloud scale
-    sphere_color = [1.0, 0.0, 0.0, 0.4]  # Bright red, alpha < 1.0 = translucent
+        # Create a sphere for each point
+        sphere_radius = 0.005  # Adjust this depending on your point cloud scale
+        sphere_color = [1.0, 0.0, 0.0, 0.4]  # Bright red, alpha < 1.0 = translucent
 
-    # Material with a transparency-capable shader; alpha comes from base_color
-    sphere_material = o3d.visualization.rendering.MaterialRecord()
-    sphere_material.shader = "defaultLitTransparency"
-    sphere_material.base_color = sphere_color
+        # Material with a transparency-capable shader; alpha comes from base_color
+        sphere_material = o3d.visualization.rendering.MaterialRecord()
+        sphere_material.shader = "defaultLitTransparency"
+        sphere_material.base_color = sphere_color
 
-    for i, pt in enumerate(picked_points):
-        # Create a primitive sphere centered at [0, 0, 0]
-        sphere = o3d.geometry.TriangleMesh.create_sphere(radius=sphere_radius)
-        sphere.compute_vertex_normals()
+        for i, pt in enumerate(selected_idx):
+            # Create a primitive sphere centered at [0, 0, 0]
+            sphere = o3d.geometry.TriangleMesh.create_sphere(radius=sphere_radius)
+            sphere.compute_vertex_normals()
 
-        # Translate it to the picked point's coordinates
-        sphere.translate(pt)
+            # Translate it to the picked point's coordinates
+            sphere.translate(pt)
 
-        # Add to our visualization list (name must be unique, material carries the alpha)
-        geometries_to_visualize.append({
-            "name": f"sphere_{i}",
-            "geometry": sphere,
-            "material": sphere_material,
-        })
+            # Add to our visualization list (name must be unique, material carries the alpha)
+            self.geometries_to_visualize.append({
+                "name": f"sphere_{i}",
+                "geometry": sphere,
+                "material": sphere_material,
+            })
 
-    # 4. Optional: Load and add your main point cloud if you want to see them together
-    pcd = o3d.io.read_point_cloud("PCDDataset/coral_frame_000.pcd")
-    geometries_to_visualize.append({"name": "pcd", "geometry": pcd})
 
-    # 5. Visualize everything (new-style draw() is required for transparency)
-    o3d.visualization.draw(geometries_to_visualize)
+
+    def view(self, interactive=False):
+        """
+        Open window to visualize. 
+        Args:
+            intneractive (bool)
+            
+        """
+        
+        # Different color per pcd for vis
+        # pcd1.paint_uniform_color([1.0, 0.0, 0.0]) 
+        # pcd2.paint_uniform_color([0.0, 0.0, 1.0])
+
+
+        if interactive:
+            selected_idxs = []
+            vis = o3d.visualization.VisualizerWithEditing()
+            vis.create_window()
+            for pcd in self.pcd_files:
+                vis.add_geometry(pcd)
+            vis.run()  # The window will pop up. Press Shift+Left Click to select points.
+            vis.destroy_window()
+
+            # Show indicies of picked
+            idx = vis.get_picked_points()
+            selected_idxs.append(np.array([idx]))
+            print("Selected point indices:", idx)
+
+            if selected_idxs is not None:
+                self.draw_sphere(selected_idxs)
+        
+        for i, pcd in enumerate(self.pcd_files):
+            self.geometries_to_visualize.append({"name": f"pcd_{i}", "geometry": pcd})
+        
+        o3d.visualization.draw(self.geometries_to_visualize, bg_color=(1.0, 1.0, 1.0, 1.0))
+
+
+    def run(self):
+        self.view(interactive=True)
 
 
 def main():
-    draw_sphere()
+    pcd0 = ["PCDDataset/coral_frame_000.pcd"]
+    pcd1 = ["PCDDataset/coral_frame_001.pcd"]
+    files = [pcd0, pcd1]
+
+    wf = WarpField(pcd0)
+    wf.run()
+
 
 if __name__=="__main__":
     main()
