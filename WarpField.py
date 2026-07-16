@@ -66,17 +66,28 @@ class WarpField():
             p' = p + strength * w(r) * n
         where w is a Gaussian falloff w(r) = exp(-r^2 / (2*sigma^2)), so the
         bulge is strongest at the node and fades with distance from it.
+
+        Affected points are also painted red so the region of influence is
+        visible in the viewer.
         """
 
         sphere_centers = np.asarray(sphere_centers)
 
-        for pcd in self.pcd_files:
+        for pcd_i, pcd in enumerate(self.pcd_files):
             rest = np.asarray(pcd.points).copy()   # canonical positions (unchanged)
             points = rest.copy()                   # deformed positions (accumulated)
             pcd_tree = o3d.geometry.KDTreeFlann(pcd)
 
-            for center in sphere_centers:
+            # Preserve existing per-point colors; only affected points get overwritten red
+            colors = np.asarray(pcd.colors).copy() if pcd.has_colors() \
+                else np.full_like(rest, 0.6)
+
+            all_affected = set()
+
+            for node_i, center in enumerate(sphere_centers):
                 idx, r = self.find_affected(pcd_tree, center)
+                print(f"[apply_transform] pcd={pcd_i} node={node_i} center={center}: "
+                      f"{idx.size} points within RADIUS={RADIUS}")
                 if idx.size == 0:
                     continue
 
@@ -89,14 +100,51 @@ class WarpField():
                 # Gaussian falloff on the distance to the node
                 w = np.exp(-r**2 / (2 * sigma**2))
 
-                points[idx] += strength * w[:, None] * n_hat
+                displacement = strength * w[:, None] * n_hat
+                points[idx] += displacement
+
+                disp_mag = np.linalg.norm(displacement, axis=1)
+                print(f"    displacement magnitude: min={disp_mag.min():.6f} "
+                      f"max={disp_mag.max():.6f} mean={disp_mag.mean():.6f}")
+
+                colors[idx] = [1.0, 0.0, 0.0]  # red
+                all_affected.update(idx.tolist())
+
+            total_moved = np.linalg.norm(points - rest, axis=1)
+            print(f"[apply_transform] pcd={pcd_i}: {len(all_affected)} unique points affected "
+                  f"(of {len(rest)}), max total displacement={total_moved.max():.6f}")
 
             pcd.points = o3d.utility.Vector3dVector(points)
+            pcd.colors = o3d.utility.Vector3dVector(colors)
 
 
+    def interactive_view(self):
+        """Open an interactive view to select points (shift + left click)."""
+
+        # Use shift + left click to select points
+        vis = o3d.visualization.VisualizerWithEditing()
+        vis.create_window()
+        for pcd in self.pcd_files:
+            vis.add_geometry(pcd)
+        vis.run()  # The window will pop up. Press Shift+Left Click to select points.
+        vis.destroy_window()
+
+        # Convert picked indices into actual xyz coordinates
+        idx = vis.get_picked_points()
+        selected_points = np.asarray(self.pcd_files[0].points)[idx]
+        print("Selected point indices:", idx)
+
+        # overwrite for now
+        # p1 = np.array([-0.045, 0.006, 0.11])        #22018 (-0.045, 0.006, 0.11)
+        # p2 = np.array([-0.0013, -0.046, 0.096])     #3565 (-0.0013, -0.046, 0.096)
+        # selected_points = [p1, p2]
+
+        if len(selected_points) > 0:
+            self.draw_sphere(selected_points)
+            self.apply_transform(selected_points)
 
 
-    def view(self, interactive=False):
+    def view(self, interactive=True):
         """
         Open window to visualize. 
         Args:
@@ -109,32 +157,16 @@ class WarpField():
         # pcd2.paint_uniform_color([0.0, 0.0, 1.0])
 
 
+        # Bring up interactive stream
         if interactive:
-            vis = o3d.visualization.VisualizerWithEditing()
-            vis.create_window()
-            for pcd in self.pcd_files:
-                vis.add_geometry(pcd)
-            vis.run()  # The window will pop up. Press Shift+Left Click to select points.
-            vis.destroy_window()
+            self.interactive_view()
 
-            # Convert picked indices into actual xyz coordinates
-            idx = vis.get_picked_points()
-            selected_points = np.asarray(self.pcd_files[0].points)[idx]
-            print("Selected point indices:", idx)
-
-            # overwrite for now
-            p1 = np.array([-0.045, 0.006, 0.11])        #22018 (-0.045, 0.006, 0.11)
-            p2 = np.array([-0.0013, -0.046, 0.096])     #3565 (-0.0013, -0.046, 0.096)
-            selected_points = [p1, p2]
-
-            if len(selected_points) > 0:
-                self.draw_sphere(selected_points)
-                self.apply_transform(selected_points)
-        
+        # Plot all geometries
         for i, pcd in enumerate(self.pcd_files):
             self.geometries_to_visualize.append({"name": f"pcd_{i}", "geometry": pcd})
         
-        o3d.visualization.draw(self.geometries_to_visualize, bg_color=(1.0, 1.0, 1.0, 1.0))
+        o3d.visualization.draw(self.geometries_to_visualize, bg_color=(1.0, 1.0, 1.0, 1.0),
+                               show_skybox=False)
 
 
     def run(self):
