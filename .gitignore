@@ -1,6 +1,9 @@
 .venv/
+__pycache__
+
 ARCHIVED/
 LFRDataset/
 LFRDatasetExtracted/
 PCDDataset/
-__pycache__/
+
+data/
