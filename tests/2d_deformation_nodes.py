@@ -26,7 +26,7 @@ from matplotlib.patches import Circle
 
 # Window spans a 1x1 area, so these are chosen to be clearly visible. They keep
 # the same relationships WarpField uses by default (strength=RADIUS, sigma=RADIUS/2).
-RADIUS = 0.15           # radius of influence around each node
+RADIUS = 0.3           # radius of influence around each node
 STRENGTH = RADIUS       # peak outward push (matches WarpField default)
 SIGMA = RADIUS / 2.0    # Gaussian falloff width (matches WarpField default)
 

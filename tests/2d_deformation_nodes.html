@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2D Warp Field Viewer</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --panel-bg: #ffffff;
+    --text: #1a1a1a;
+    --muted: #666666;
+    --border: #dde1e6;
+    --accent: #189a35;
+    --accent-text: #ffffff;
+    --track: #e2e5ea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15171c;
+      --panel-bg: #1e2128;
+      --text: #e8e9eb;
+      --muted: #9aa0aa;
+      --border: #33373f;
+      --accent: #2ecc55;
+      --accent-text: #0c1410;
+      --track: #333844;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 24px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+
+  .app { max-width: 1100px; margin: 0 auto; }
+
+  h1 { font-size: 1.35rem; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); font-size: 0.9rem; margin: 0 0 20px; max-width: 70ch; line-height: 1.4; }
+  .subtitle code { background: var(--track); padding: 1px 5px; border-radius: 4px; font-size: 0.85em; }
+
+  main { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+
+  .canvas-wrap { flex: 1 1 480px; min-width: 300px; }
+
+  #status {
+    margin: 0 0 10px;
+    font-size: 0.85rem;
+    color: var(--muted);
+    line-height: 1.4;
+    min-height: 2.6em;
+  }
+
+  canvas {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: block;
+    width: 100%;
+    max-width: 640px;
+    height: auto;
+    aspect-ratio: 1 / 1;
+    cursor: crosshair;
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 12px;
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+  .swatch.ring { border-radius: 50%; border: 1.5px solid rgba(24,154,53,0.9); background: rgba(24,154,53,0.12); width: 14px; height: 14px; }
+  .swatch.arrow { width: 16px; height: 2px; background: rgba(0,0,0,0.45); }
+
+  .panel {
+    flex: 0 0 300px;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+  }
+
+  .control { margin-bottom: 18px; }
+  .control label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .control label .value {
+    font-variant-numeric: tabular-nums;
+    font-weight: 400;
+    color: var(--accent);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .control .hint {
+    font-size: 0.76rem;
+    color: var(--muted);
+    margin: 6px 0 0;
+    line-height: 1.35;
+  }
+
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+  }
+
+  .buttons { display: flex; gap: 8px; margin-bottom: 16px; }
+  button {
+    flex: 1;
+    padding: 9px 10px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--accent);
+    color: var(--accent-text);
+    cursor: pointer;
+  }
+  button.secondary {
+    background: transparent;
+    color: var(--text);
+  }
+  button:active { transform: translateY(1px); }
+
+  .stats {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  .log-title {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  #log {
+    margin: 0;
+    background: var(--track);
+    border-radius: 6px;
+    padding: 8px 10px;
+    height: 220px;
+    overflow-y: auto;
+    font-size: 0.72rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text);
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>2D Warp Field Viewer</h1>
+  <p class="subtitle">
+    Same Gaussian push-outward deformation as <code>WarpField.apply_transform</code>
+    (mirrored in <code>tests/2d_deformation_nodes.py</code>), in 2D with live Radius / Sigma sliders.
+    Click grid points to place deformation nodes, then press <b>Enter</b> or <b>Transform</b>.
+  </p>
+
+  <main>
+    <div class="canvas-wrap">
+      <p id="status">Click grid points to toggle deformation nodes (green). Affected points turn red.</p>
+      <canvas id="canvas" width="640" height="640"></canvas>
+      <div class="legend">
+        <span><span class="swatch" style="background:#a6a6a6"></span> grid point</span>
+        <span><span class="swatch" style="background:#189a35"></span> deformation node</span>
+        <span><span class="swatch" style="background:#e61a1a"></span> affected point</span>
+        <span><span class="swatch ring"></span> radius of influence</span>
+        <span><span class="swatch arrow"></span> displacement</span>
+      </div>
+    </div>
+
+    <aside class="panel">
+      <div class="control">
+        <label for="radiusSlider">Radius <span class="value" id="radiusValue">0.300</span></label>
+        <input type="range" id="radiusSlider" min="0.02" max="0.5" step="0.005" value="0.3">
+        <p class="hint">Neighborhood cutoff around each node — also sets push strength
+          (strength = radius, matching WarpField's default).</p>
+      </div>
+      <div class="control">
+        <label for="sigmaSlider">Sigma — Gaussian falloff <span class="value" id="sigmaValue">0.150</span></label>
+        <input type="range" id="sigmaSlider" min="0.01" max="0.5" step="0.005" value="0.15">
+        <p class="hint">Width of w(r) = exp(-r&sup2; / (2&sigma;&sup2)) — smaller = push falls off
+          faster with distance from the node.</p>
+      </div>
+
+      <div class="buttons">
+        <button id="transformBtn">Transform (Enter)</button>
+        <button id="resetBtn" class="secondary">Reset (r)</button>
+      </div>
+
+      <div class="stats" id="stats">Nodes: 0 &nbsp; Affected: 0 / 441</div>
+
+      <div class="log-title">Log</div>
+      <pre id="log"></pre>
+    </aside>
+  </main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- reproducible grid (matches Warp2DTest defaults: grid_n=21, extent=(0,1)) ----
+  const GRID_N = 21;
+  const points = [];
+  for (let row = 0; row < GRID_N; row++) {
+    for (let col = 0; col < GRID_N; col++) {
+      points.push([col / (GRID_N - 1), row / (GRID_N - 1)]);
+    }
+  }
+
+  // World bounds are fixed (independent of the radius slider) so the view never
+  // jumps around as you drag it. Padding must cover the slider's max radius.
+  const RADIUS_SLIDER_MAX = 0.5;
+  const WORLD_PAD = 0.05;
+  const WORLD_MIN = -(RADIUS_SLIDER_MAX + WORLD_PAD);
+  const WORLD_MAX = 1 + (RADIUS_SLIDER_MAX + WORLD_PAD);
+  const WORLD_RANGE = WORLD_MAX - WORLD_MIN;
+
+  const COLOR_GRAY = "#a6a6a6";
+  const COLOR_RED = "#e61a1a";
+  const COLOR_GREEN = "#189a35";
+  const COLOR_NODE_FILL = "rgba(24,154,53,0.12)";
+  const COLOR_NODE_STROKE = "rgba(24,140,51,0.9)";
+  const COLOR_ARROW = "rgba(0,0,0,0.45)";
+  const COLOR_HOLLOW = "rgba(128,128,128,0.6)";
+  const COLOR_BOUNDS = "rgba(0,0,0,0.15)";
+
+  // ---- DOM ----
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+  const statusEl = document.getElementById("status");
+  const statsEl = document.getElementById("stats");
+  const logEl = document.getElementById("log");
+  const radiusSlider = document.getElementById("radiusSlider");
+  const sigmaSlider = document.getElementById("sigmaSlider");
+  const radiusValueEl = document.getElementById("radiusValue");
+  const sigmaValueEl = document.getElementById("sigmaValue");
+  const transformBtn = document.getElementById("transformBtn");
+  const resetBtn = document.getElementById("resetBtn");
+
+  // ---- state ----
+  let radius = parseFloat(radiusSlider.value);
+  let sigma = parseFloat(sigmaSlider.value);
+  let state = "editing";              // "editing" | "deformed"
+  const nodeIdx = new Set();          // indices into `points` that are nodes
+  let affectedMask = new Array(points.length).fill(false);
+  let deformed = null;                // current deformed positions, once transformed
+  let lastResult = null;              // most recent computeDeformation() output
+  let canvasSize = 640;               // CSS px, kept in sync by setupCanvas()
+
+  // ---- coordinate transforms (world <-> CSS px, y flipped for math orientation) ----
+  function toPx(p) {
+    const s = canvasSize / WORLD_RANGE;
+    return [(p[0] - WORLD_MIN) * s, canvasSize - (p[1] - WORLD_MIN) * s];
+  }
+  function toPxLen(len) {
+    return (len / WORLD_RANGE) * canvasSize;
+  }
+  function fromPx(px, py) {
+    const s = WORLD_RANGE / canvasSize;
+    return [WORLD_MIN + px * s, WORLD_MIN + (canvasSize - py) * s];
+  }
+
+  // ---- math: same equations as WarpField.apply_transform / apply_transform() in the .py test ----
+  // v = p - c ; r = ||v|| ; n = v / r ; p' = p + strength * exp(-r^2 / (2*sigma^2)) * n
+  // strength is tied to radius (strength = radius), matching the WarpField default.
+  function computeDeformation(nodeList) {
+    const rest = points;
+    const deformedPts = rest.map((p) => [p[0], p[1]]);
+    const mask = new Array(rest.length).fill(false);
+    const perNode = [];
+
+    for (const ci of nodeList) {
+      const center = rest[ci];
+      let count = 0, minMag = Infinity, maxMag = 0, sumMag = 0;
+      for (let i = 0; i < rest.length; i++) {
+        const vx = rest[i][0] - center[0];
+        const vy = rest[i][1] - center[1];
+        const r = Math.hypot(vx, vy);
+        if (r <= radius) {
+          count++;
+          let nx = 0, ny = 0;
+          if (r > 1e-9) { nx = vx / r; ny = vy / r; }
+          const w = Math.exp(-(r * r) / (2 * sigma * sigma));
+          const dx = radius * w * nx;
+          const dy = radius * w * ny;
+          deformedPts[i][0] += dx;
+          deformedPts[i][1] += dy;
+          mask[i] = true;
+          const mag = Math.hypot(dx, dy);
+          if (mag < minMag) minMag = mag;
+          if (mag > maxMag) maxMag = mag;
+          sumMag += mag;
+        }
+      }
+      perNode.push({
+        center, count,
+        minMag: count ? minMag : 0,
+        maxMag,
+        meanMag: count ? sumMag / count : 0,
+      });
+    }
+
+    let affectedCount = 0, maxTotal = 0;
+    for (let i = 0; i < rest.length; i++) {
+      if (mask[i]) {
+        affectedCount++;
+        const tot = Math.hypot(deformedPts[i][0] - rest[i][0], deformedPts[i][1] - rest[i][1]);
+        if (tot > maxTotal) maxTotal = tot;
+      }
+    }
+    return { deformed: deformedPts, mask, perNode, affectedCount, maxTotal };
+  }
+
+  function computeAffectedMask(centers) {
+    const mask = new Array(points.length).fill(false);
+    for (const c of centers) {
+      for (let i = 0; i < points.length; i++) {
+        if (Math.hypot(points[i][0] - c[0], points[i][1] - c[1]) <= radius) mask[i] = true;
+      }
+    }
+    return mask;
+  }
+
+  // ---- logging (mirrors the .py test's print() lines) ----
+  function log(msg) {
+    logEl.textContent += msg + "\n";
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function logVerbose(result) {
+    result.perNode.forEach((info, k) => {
+      log(`[apply_transform] node=${k} center=(${info.center[0].toFixed(3)}, ${info.center[1].toFixed(3)}): ` +
+          `${info.count} points within RADIUS=${radius.toFixed(3)}`);
+      if (info.count > 0) {
+        log(`    displacement magnitude: min=${info.minMag.toFixed(4)} max=${info.maxMag.toFixed(4)} mean=${info.meanMag.toFixed(4)}`);
+      }
+    });
+    log(`[apply_transform] ${result.affectedCount} unique points affected (of ${points.length}), ` +
+        `max total displacement=${result.maxTotal.toFixed(4)}`);
+  }
+
+  // ---- drawing ----
+  function drawDot(p, r, color) {
+    const [px, py] = toPx(p);
+    ctx.beginPath();
+    ctx.arc(px, py, r, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+
+  function drawHollowDot(p, r, color) {
+    const [px, py] = toPx(p);
+    ctx.beginPath();
+    ctx.arc(px, py, r, 0, Math.PI * 2);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+  }
+
+  function drawNodeCircle(p) {
+    const [px, py] = toPx(p);
+    const rr = toPxLen(radius);
+    ctx.beginPath();
+    ctx.arc(px, py, rr, 0, Math.PI * 2);
+    ctx.fillStyle = COLOR_NODE_FILL;
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = COLOR_NODE_STROKE;
+    ctx.stroke();
+  }
+
+  function drawArrow(from, to) {
+    const [x1, y1] = toPx(from);
+    const [x2, y2] = toPx(to);
+    const dx = x2 - x1, dy = y2 - y1;
+    if (Math.hypot(dx, dy) < 0.5) return;
+    ctx.strokeStyle = COLOR_ARROW;
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+
+    const ah = 4.5;
+    const ang = Math.atan2(dy, dx);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - ah * Math.cos(ang - Math.PI / 6), y2 - ah * Math.sin(ang - Math.PI / 6));
+    ctx.lineTo(x2 - ah * Math.cos(ang + Math.PI / 6), y2 - ah * Math.sin(ang + Math.PI / 6));
+    ctx.closePath();
+    ctx.fillStyle = COLOR_ARROW;
+    ctx.fill();
+  }
+
+  function drawBounds() {
+    const [x0, y0] = toPx([0, 0]);
+    const [x1, y1] = toPx([1, 1]);
+    ctx.strokeStyle = COLOR_BOUNDS;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0));
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvasSize, canvasSize);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvasSize, canvasSize);
+    drawBounds();
+
+    for (const i of nodeIdx) drawNodeCircle(points[i]);
+
+    const showDeformed = state === "deformed" && deformed;
+    if (showDeformed) {
+      for (let i = 0; i < points.length; i++) {
+        if (affectedMask[i]) drawHollowDot(points[i], 3, COLOR_HOLLOW);
+      }
+      for (let i = 0; i < points.length; i++) {
+        if (affectedMask[i]) drawArrow(points[i], deformed[i]);
+      }
+    }
+
+    const positions = showDeformed ? deformed : points;
+    for (let i = 0; i < points.length; i++) {
+      let color = COLOR_GRAY, r = 3;
+      if (nodeIdx.has(i)) { color = COLOR_GREEN; r = 6; }         // nodes override affected coloring
+      else if (affectedMask[i]) { color = COLOR_RED; r = 3; }
+      drawDot(positions[i], r, color);
+    }
+  }
+
+  function updateStats() {
+    const affectedCount = affectedMask.reduce((a, b) => a + (b ? 1 : 0), 0);
+    statsEl.textContent = `Nodes: ${nodeIdx.size}   Affected: ${affectedCount} / ${points.length}`;
+  }
+
+  // ---- actions ----
+  function toggleNode(i) {
+    if (state !== "editing") return;
+    const [x, y] = points[i];
+    if (nodeIdx.has(i)) {
+      nodeIdx.delete(i);
+      log(`[node] removed grid point ${i} -> ${nodeIdx.size} node(s)`);
+    } else {
+      nodeIdx.add(i);
+      log(`[node] added grid point ${i} at (${x.toFixed(3)}, ${y.toFixed(3)}) -> ${nodeIdx.size} node(s)`);
+    }
+    affectedMask = computeAffectedMask([...nodeIdx].map((idx) => points[idx]));
+    updateStats();
+    draw();
+  }
+
+  function applyVerbose() {
+    if (nodeIdx.size === 0) {
+      log("No deformation nodes selected — click grid points, then press Enter or Transform.");
+      return;
+    }
+    lastResult = computeDeformation([...nodeIdx]);
+    logVerbose(lastResult);
+    deformed = lastResult.deformed;
+    affectedMask = lastResult.mask;
+    state = "deformed";
+    updateStats();
+    draw();
+    statusEl.textContent = "Transformed — red = affected, arrows = displacement. " +
+      "Adjust sliders to explore live, or Reset.";
+  }
+
+  function applyLive() {
+    if (state !== "deformed") return;
+    lastResult = computeDeformation([...nodeIdx]);
+    deformed = lastResult.deformed;
+    affectedMask = lastResult.mask;
+    updateStats();
+    draw();
+  }
+
+  function logSliderSummary() {
+    if (state === "deformed" && lastResult) {
+      log(`[slider] radius=${radius.toFixed(3)} sigma=${sigma.toFixed(3)} -> ` +
+          `${lastResult.affectedCount} affected, max total displacement=${lastResult.maxTotal.toFixed(4)}`);
+    }
+  }
+
+  function reset() {
+    nodeIdx.clear();
+    deformed = null;
+    lastResult = null;
+    affectedMask = new Array(points.length).fill(false);
+    state = "editing";
+    updateStats();
+    draw();
+    log("[reset] cleared all nodes");
+    statusEl.textContent = "Click grid points to toggle deformation nodes (green). Affected points turn red.";
+  }
+
+  // ---- canvas sizing (device-pixel-ratio aware, responsive) ----
+  function setupCanvas() {
+    const cssWidth = canvas.getBoundingClientRect().width || 640;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(cssWidth * dpr);
+    canvas.height = Math.round(cssWidth * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    canvasSize = cssWidth;
+    draw();
+  }
+
+  // ---- events ----
+  canvas.addEventListener("click", (evt) => {
+    if (state !== "editing") return;
+    const rect = canvas.getBoundingClientRect();
+    const [wx, wy] = fromPx(evt.clientX - rect.left, evt.clientY - rect.top);
+    let best = -1, bestD = Infinity;
+    for (let i = 0; i < points.length; i++) {
+      const d = (points[i][0] - wx) ** 2 + (points[i][1] - wy) ** 2;
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    if (best >= 0) toggleNode(best);
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); applyVerbose(); }
+    else if (e.key === "r" || e.key === "R") { reset(); }
+  });
+
+  transformBtn.addEventListener("click", applyVerbose);
+  resetBtn.addEventListener("click", reset);
+
+  radiusSlider.addEventListener("input", () => {
+    radius = parseFloat(radiusSlider.value);
+    radiusValueEl.textContent = radius.toFixed(3);
+    if (state === "deformed") {
+      applyLive();
+    } else {
+      affectedMask = computeAffectedMask([...nodeIdx].map((idx) => points[idx]));
+      updateStats();
+      draw();
+    }
+  });
+  radiusSlider.addEventListener("change", logSliderSummary);
+
+  sigmaSlider.addEventListener("input", () => {
+    sigma = parseFloat(sigmaSlider.value);
+    sigmaValueEl.textContent = sigma.toFixed(3);
+    applyLive();
+  });
+  sigmaSlider.addEventListener("change", logSliderSummary);
+
+  window.addEventListener("resize", setupCanvas);
+
+  // ---- init ----
+  log(`Grid: ${points.length} points | RADIUS=${radius.toFixed(3)} STRENGTH=radius SIGMA=${sigma.toFixed(3)}`);
+  updateStats();
+  setupCanvas();
+})();
+</script>
+</body>
+</html>
