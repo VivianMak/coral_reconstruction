@@ -17,98 +17,117 @@ def preprocess(img, use_clahe=True):
 
     return gray
 
-
-def show_keypoints(img, kp, title):
+def show_keypoints(img, kp, alg):
+    """Draw the extracted keypoints on each image"""
     output_image = cv2.drawKeypoints(img, kp, None, color=(0, 255, 0))
 
     plt.figure(figsize=(10, 6))
     plt.imshow(cv2.cvtColor(output_image, cv2.COLOR_BGR2RGB))
-    plt.title(f"{title} - {len(kp)} keypoints, w/o CLAHE")
+    plt.title(f"{alg} - {len(kp)} keypoints, w/o CLAHE")
     plt.axis('off')
     plt.show()
 
-def orb_extract(img):
 
-    # gray = preprocess(img)
+def orb_extract(img):
+    """Use orb algorithm"""
+    gray = preprocess(img)
 
     # Initiate STAR detector
-    orb = cv2.ORB_create(nfeatures=500,
-                        fastThreshold=10)
+    orb = cv2.ORB_create(
+        nfeatures=500,
+        fastThreshold=10
+    )
 
-    # find the keypoints with ORB
-    kp, des = orb.detectAndCompute(img, None)
-    print(f"ORB: {len(kp)} keypoints")
+    kp, des = orb.detectAndCompute(gray, None)
+    print(f"[Feature Extracting] ORB: {len(kp)} keypoints")
 
-    show_keypoints(img, kp, "ORB")
     return kp, des
 
 
 def sift_extract(img):
-    # gray = preprocess(img)
-
-    sift = cv2.SIFT_create(
-        # 0 = keep every keypoint found, don't rank-and-truncate
-        nfeatures=500,
-        # more scale samples per octave -> catches tentacles at more thicknesses
-        nOctaveLayers=4,
-        # THE main lever. Default 0.04 rejects low-contrast blobs, which is
-        # exactly what coral tentacles are. 0.01 -> ~4.5x more keypoints.
-        # Drop to 0.005 if you still need more, at the cost of noise.
-        contrastThreshold=0.01,
-        # larger = FEWER features filtered out (inverted vs contrastThreshold).
-        # Tentacles are ridge/edge-like, so raising this keeps them.
-        edgeThreshold=20,
-        # assumed blur already in the image. The LFR thumbnail is soft/decimated,
-        # so pre-blurring less (1.2 < 1.6 default) preserves fine structure.
-        sigma=1.2,
-    )
-
-    kp, des = sift.detectAndCompute(img, None)
-    print(f"SIFT: {len(kp)} keypoints")
-
-    show_keypoints(img, kp, "SIFT")
-    return kp, des
-
-
-def akaze_extract(img):
+    """Use sift algorithm"""
     gray = preprocess(img)
 
-    # NOTE: AKAZE lives in OpenCV 4.x main modules. It was moved out in 5.x,
-    # so the plain opencv-python 5.0 wheel does not ship it at all.
-    akaze = cv2.AKAZE_create(
-        # MLDB = binary descriptor. Use *_UPRIGHT variants if the views are
-        # rotation-aligned, which is cheaper and slightly more discriminative.
-        descriptor_type=cv2.AKAZE_DESCRIPTOR_MLDB,
-        descriptor_size=0,        # 0 = full 486-bit descriptor
-        descriptor_channels=3,
-        # THE main lever, same story as SIFT's contrastThreshold.
-        # Default 0.001 -> 0.0001 gives ~3x more keypoints.
-        threshold=0.002,
-        nOctaves=4,
-        nOctaveLayers=5,
-        # WEICKERT diffusion enhances elongated/ridge-like structures, which is
-        # the right bias for tentacles. Only ~4% more kp than PM_G2 though.
-        diffusivity=cv2.KAZE_DIFF_WEICKERT,
+    sift = cv2.SIFT_create(
+        nfeatures=500,          # 0 = keep all kps found
+        nOctaveLayers=4,        # more scale samples per octave -> catches tentacles at more thicknesses
+        contrastThreshold=0.01,     # lower accepts lower contrast blobs at the cost of noise
+        edgeThreshold=20,           # larger = FEWER features filtered out
+        sigma=1.2,                  # lower to preserve fine structure
     )
 
-    kp, des = akaze.detectAndCompute(img, None)
-    print(f"AKAZE: {len(kp)} keypoints")
+    kp, des = sift.detectAndCompute(gray, None)
+    print(f"[Feature Extracting] SIFT: {len(kp)} keypoints")
 
-    show_keypoints(img, kp, "AKAZE")
     return kp, des
+
+
+def extract_features(img, alg="SIFT", show=False):
+    """Takes in image and extracts features with selected algorithm"""
+
+    if alg=="SIFT":
+        kp, des = sift_extract(img)
+    else:
+        kp, des = orb_extract(img)
+
+    if show:
+        show_keypoints(img, kp, alg)
+
+    return kp, des
+
+def show_matches(img1, kp1, img2, kp2, good_matches, i):
+    """Draw matches on two consecutive frames"""
+
+    output_img = cv2.drawMatches(
+        img1, kp1, img2, kp2, good_matches, None, 
+        flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS
+    )
+
+    print(f"[Feature Matching] - {len(good_matches)} good matches between images {i} and {i+1} ")
+
+    cv2.imshow('FLANN Feature Matching', output_img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+def match_features(des1, des2):
+    # 3. Configure FLANN Matcher parameters
+    FLANN_INDEX_KDTREE = 1
+    index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
+    search_params = dict(checks=50) # More checks = higher accuracy, slower speed
+
+    flann = cv2.FlannBasedMatcher(index_params, search_params)
+
+    matches = flann.knnMatch(des1, des2, k=2)
+
+    good_matches = []
+    for m, n in matches:
+        if m.distance < 0.1 * n.distance:
+            good_matches.append(m)
+
+    return good_matches
 
 
 def main():
-    img = cv2.imread("LFRDatasetExtracted/IMG_0162/thumbnail.png")
+    img_names = ["IMG_0151", "IMG_0152"]
+    img_list = []
+    kp_list = []
+    des_list = []
 
-    # img = preprocess(img)
-    # plt.imshow(img)
-    # plt.show()
+
+    for name in img_names:
+        img = cv2.imread(f"LFRDatasetExtracted/{name}/thumbnail.png")
+        kp, des = extract_features(img, alg="SIFT", show=False)
+
+        img_list.append(img)
+        kp_list.append(kp)
+        des_list.append(des)
+
+    for i in range(len(img_list) - 1):
+        good_matches = match_features(des_list[i], des_list[i + 1])
+
+        show_matches(img_list[i], kp_list[i], img_list[i + 1], kp_list[i + 1], good_matches, i)
 
 
-    # orb_extract(img)
-    # sift_extract(img)
-    akaze_extract(img)
 
 
 if __name__=="__main__":
