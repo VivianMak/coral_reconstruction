@@ -3,33 +3,10 @@ import cv2
 import os
 from matplotlib import pyplot as plt
 
-def orb_extract(img):
-
-    # Initiate STAR detector
-    orb = cv2.ORB_create(nfeatures=2000,
-                        fastThreshold=10)
-
-    # find the keypoints with ORB
-    kp, des = orb.detectAndCompute(img, None)
-
-    print(len(kp))
-
-    # draw only keypoints location,not size and orientation
-    output_image = cv2.drawKeypoints(img, kp, None, color=(0,255,0))
-
-
-    plt.figure(figsize=(10, 6))
-    plt.imshow(cv2.cvtColor(output_image, cv2.COLOR_BGR2RGB))
-    plt.axis('off')
-    plt.show()
-
 
 def preprocess(img, use_clahe=True):
-    """Grayscale + local contrast boost.
-
-    CLAHE is the single biggest lever on this data: overlapping tentacles sit in
-    low-contrast shadow, and equalizing locally roughly doubles the keypoint
-    count for every detector (SIFT 6.6k -> 16.3k, AKAZE 1.1k -> 2.5k).
+    """
+    Require grayscale for local contrast boost.
     """
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if img.ndim == 3 else img
 
@@ -46,17 +23,32 @@ def show_keypoints(img, kp, title):
 
     plt.figure(figsize=(10, 6))
     plt.imshow(cv2.cvtColor(output_image, cv2.COLOR_BGR2RGB))
-    plt.title(f"{title} - {len(kp)} keypoints")
+    plt.title(f"{title} - {len(kp)} keypoints, w/o CLAHE")
     plt.axis('off')
     plt.show()
 
+def orb_extract(img):
 
-def sift_extract(img, use_clahe=True):
-    gray = preprocess(img, use_clahe)
+    # gray = preprocess(img)
+
+    # Initiate STAR detector
+    orb = cv2.ORB_create(nfeatures=500,
+                        fastThreshold=10)
+
+    # find the keypoints with ORB
+    kp, des = orb.detectAndCompute(img, None)
+    print(f"ORB: {len(kp)} keypoints")
+
+    show_keypoints(img, kp, "ORB")
+    return kp, des
+
+
+def sift_extract(img):
+    # gray = preprocess(img)
 
     sift = cv2.SIFT_create(
         # 0 = keep every keypoint found, don't rank-and-truncate
-        nfeatures=0,
+        nfeatures=500,
         # more scale samples per octave -> catches tentacles at more thicknesses
         nOctaveLayers=4,
         # THE main lever. Default 0.04 rejects low-contrast blobs, which is
@@ -71,15 +63,15 @@ def sift_extract(img, use_clahe=True):
         sigma=1.2,
     )
 
-    kp, des = sift.detectAndCompute(gray, None)
+    kp, des = sift.detectAndCompute(img, None)
     print(f"SIFT: {len(kp)} keypoints")
 
     show_keypoints(img, kp, "SIFT")
     return kp, des
 
 
-def akaze_extract(img, use_clahe=True):
-    gray = preprocess(img, use_clahe)
+def akaze_extract(img):
+    gray = preprocess(img)
 
     # NOTE: AKAZE lives in OpenCV 4.x main modules. It was moved out in 5.x,
     # so the plain opencv-python 5.0 wheel does not ship it at all.
@@ -91,7 +83,7 @@ def akaze_extract(img, use_clahe=True):
         descriptor_channels=3,
         # THE main lever, same story as SIFT's contrastThreshold.
         # Default 0.001 -> 0.0001 gives ~3x more keypoints.
-        threshold=0.0001,
+        threshold=0.002,
         nOctaves=4,
         nOctaveLayers=5,
         # WEICKERT diffusion enhances elongated/ridge-like structures, which is
@@ -99,7 +91,7 @@ def akaze_extract(img, use_clahe=True):
         diffusivity=cv2.KAZE_DIFF_WEICKERT,
     )
 
-    kp, des = akaze.detectAndCompute(gray, None)
+    kp, des = akaze.detectAndCompute(img, None)
     print(f"AKAZE: {len(kp)} keypoints")
 
     show_keypoints(img, kp, "AKAZE")
@@ -109,14 +101,14 @@ def akaze_extract(img, use_clahe=True):
 def main():
     img = cv2.imread("LFRDatasetExtracted/IMG_0162/thumbnail.png")
 
-    img = preprocess(img, use_clahe=True)
-    plt.imshow(img)
-    plt.show()
+    # img = preprocess(img)
+    # plt.imshow(img)
+    # plt.show()
 
 
     # orb_extract(img)
     # sift_extract(img)
-    # akaze_extract(img)
+    akaze_extract(img)
 
 
 if __name__=="__main__":
