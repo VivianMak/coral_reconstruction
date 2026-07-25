@@ -75,15 +75,21 @@ def extract_features(img, alg="SIFT", show=False):
 
     return kp, des
 
-def show_matches(img1, kp1, img2, kp2, good_matches, i):
+def show_matches(img1, kp1, img2, kp2, good_matches, img_name1, img_name2):
     """Draw matches on two consecutive frames"""
 
     output_img = cv2.drawMatches(
-        img1, kp1, img2, kp2, good_matches, None, 
+        img1, kp1, img2, kp2, good_matches, None,
         flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS
     )
 
-    print(f"[Feature Matching] - {len(good_matches)} good matches between images {i} and {i+1} ")
+    # label with image name
+    RED = (0, 0, 255)   # BGR
+    for text, x in [(img_name1, 10), (img_name2, img1.shape[1] + 10)]:
+        cv2.putText(output_img, text, (x, 30), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.9, RED, 2, cv2.LINE_AA)
+
+    print(f"[Feature Matching] - {len(good_matches)} good matches between images {img_name1} and {img_name2} ")
 
     cv2.imshow('FLANN Feature Matching', output_img)
     cv2.waitKey(0)
@@ -101,14 +107,14 @@ def match_features(des1, des2):
 
     good_matches = []
     for m, n in matches:
-        if m.distance < 0.1 * n.distance:
+        if m.distance < 0.8 * n.distance:
             good_matches.append(m)
 
     return good_matches
 
 
 def main():
-    img_names = ["IMG_0151", "IMG_0152"]
+    img_names = ["IMG_0152", "IMG_0162"]
     img_list = []
     kp_list = []
     des_list = []
@@ -125,7 +131,7 @@ def main():
     for i in range(len(img_list) - 1):
         good_matches = match_features(des_list[i], des_list[i + 1])
 
-        show_matches(img_list[i], kp_list[i], img_list[i + 1], kp_list[i + 1], good_matches, i)
+        show_matches(img_list[i], kp_list[i], img_list[i + 1], kp_list[i + 1], good_matches, img_names[i], img_names[i+1])
 
 
 
