@@ -1,6 +1,7 @@
 import argparse
 import json
 import re
+import os
 import numpy as np
 from pathlib import Path
 import matplotlib.pyplot as plt
@@ -13,16 +14,25 @@ DEFAULTS = dict(zip(ABBS, VALS))
 SHOW_VALS = False
 SHOW_DEPTHS = True
 
+EXTRACTED_DIR = "LFRDatasetExtracted/"
+
 
 class PlenoptisignLFR:
 
-    def __init__(self, capture_json, calibration_json):
+    def __init__(self, lfr):
        self.params = {}
        self.sources = {}
        self.results = {}
 
-       self.capture_json = str(capture_json)
-       self.calibrate_json = str(calibration_json)
+       self.lfr = lfr
+
+       # Same calibration across all images
+       self.calibrate_json = EXTRACTED_DIR + "Calibration/mod_0008.json"
+
+       # Per LFR
+       self.capture_json = os.path.join(EXTRACTED_DIR, lfr, f"{lfr}.json")
+       self.disparity_file = os.path.join(EXTRACTED_DIR, lfr, "depth.pfm")
+       self.thumbnail_file = os.path.join(EXTRACTED_DIR, lfr, "thumbnail.png")
 
        self.build_params()
 
@@ -201,46 +211,124 @@ class PlenoptisignLFR:
         for d, z in z_lookup.items():
             depth_map[disparity_map == d] = z
 
-        return depth_map
+        self.depth_map = depth_map
 
-    def update(self, capture_json, calibration_json, disparity_file=None, virtual_cam_gap=None, disparity_val=None):
-        """Main loop, run per frame."""
+        if SHOW_DEPTHS:
 
-        # Update the metadata files
-        self.capture_json = capture_json
-        self.calibrate_json = calibration_json
+            # Get original image for comparison
+            if os.path.isfile(self.thumbnail_file):
+                fig, (ax_orig, ax_depth) = plt.subplots(1, 2, figsize=(14, 6))
+                ax_orig.imshow(plt.imread(self.thumbnail_file))
+                ax_orig.set_title("Original")
+                ax_orig.axis("off")
+            else:
+                print(f"Thumbnail not found at {self.thumbnail_file}; showing depth map only")
+                fig, ax_depth = plt.subplots(figsize=(8, 6))
 
-        # self.disparity_file = disparity_file
-        self.disparity_file = 'LFRDatasetExtracted/Bee_1/depth.pfm'
+            vmin, vmax = np.percentile(depth_map, [2, 98])
+            # vmin, vmax = 43, 44
+            im = ax_depth.imshow(depth_map, cmap="viridis", vmin=vmin, vmax=vmax)
+            cbar = fig.colorbar(im, ax=ax_depth)
+            cbar.set_label("Metric depth (mm)")
+            ax_depth.set_title("Metric Depth Map")
+            ax_depth.axis("off")
+
+            docs_dir = os.path.join(EXTRACTED_DIR, self.lfr, "docs")
+            os.makedirs(docs_dir, exist_ok=True)
+            fig.savefig(os.path.join(docs_dir, "metric_depth.png"), dpi=150, bbox_inches="tight")
+
+            self.depth_pc()
+
+            plt.show()
+
+    def depth_pc(self):
+        """Display a 3D point cloud of the METRIC depth map. Sensor-plane
+        pixel coords are back-projected to object space via similar
+        triangles (pinhole approximation, using the sourced pixel pitch
+        and main-lens focal length), then colored from the thumbnail when
+        its resolution matches depth.pfm (true for the PlenoptiCam output
+        used here)."""
+
+        if not hasattr(self, "depth_map"):
+            raise RuntimeError("depth_pc() requires depth_map_from_disparity() to run first")
+
+        depth_map = self.depth_map
+        height_px, width_px = depth_map.shape
+
+        pixel_pitch_mm = self.params.get("pp", DEFAULTS["pp"])
+        f_mm = self.params.get("fU", DEFAULTS["fU"])
+
+        ys, xs = np.mgrid[0:height_px, 0:width_px]
+        z_mm = depth_map
+
+        # sensor-plane coords (mm, centered on optical axis), back-projected
+        # to object-space X/Y using the metric depth at each pixel
+        x_sensor_mm = (xs - width_px / 2) * pixel_pitch_mm
+        y_sensor_mm = (ys - height_px / 2) * pixel_pitch_mm
+        scale = z_mm / f_mm
+        x_mm = x_sensor_mm * scale
+        y_mm = y_sensor_mm * scale
+
+        colors = None
+        if os.path.isfile(self.thumbnail_file):
+            thumb = np.asarray(plt.imread(self.thumbnail_file))[..., :3].astype(float)
+            if thumb.shape[:2] == depth_map.shape:
+                colors = thumb / thumb.max() if thumb.max() > 1 else thumb
+
+        # subsample so the scatter stays responsive
+        max_points = 60000
+        step = max(1, int(np.sqrt((height_px * width_px) / max_points)))
+
+        x_mm = x_mm[::step, ::step].ravel()
+        y_mm = y_mm[::step, ::step].ravel()
+        z_sub = z_mm[::step, ::step].ravel()
+        c = colors[::step, ::step].reshape(-1, 3) if colors is not None else z_sub
+
+        fig = plt.figure(figsize=(8, 7))
+        ax = fig.add_subplot(111, projection="3d")
+        sc = ax.scatter(x_mm, y_mm, z_sub, c=c, cmap=None if colors is not None else "viridis",
+                         s=2, marker=".")
+        ax.set_xlabel("X (mm)")
+        ax.set_ylabel("Y (mm)")
+        ax.set_zlabel("Depth Z (mm)")
+        ax.set_title("Metric Depth Point Cloud")
+        if colors is None:
+            fig.colorbar(sc, ax=ax, label="Metric depth (mm)")
+
+        docs_dir = os.path.join(EXTRACTED_DIR, self.lfr, "docs")
+        os.makedirs(docs_dir, exist_ok=True)
+        fig.savefig(os.path.join(docs_dir, "point_cloud.png"), dpi=150, bbox_inches="tight")
+
+        return fig
+
+    def update(self, lfr, virtual_cam_gap=None, disparity_val=None):
+        """Main loop, run per frame. Re-derives the capture/disparity paths
+        for `lfr` (every extracted LFR follows the same directory layout as
+        __init__); the calibration json is shared across all LFRs."""
+
+        self.lfr = lfr
+        self.capture_json = os.path.join(EXTRACTED_DIR, lfr, f"{lfr}.json")
+        self.disparity_file = os.path.join(EXTRACTED_DIR, lfr, "depth.pfm")
+        self.thumbnail_file = os.path.join(EXTRACTED_DIR, lfr, "thumbnail.png")
 
         # Edit the per frame metadata
         self.add_params(virtual_cam_gap, disparity_val)
-        
+
         # Calculate with plenoptisign
         self.run_plenopticam()
 
         if SHOW_VALS: self.report()
         print(self.results)
 
-        depth_map = self.depth_map_from_disparity()
-
-        if SHOW_DEPTHS:
-            fig, ax = plt.subplots(figsize=(8, 6))
-            im = ax.imshow(depth_map, cmap="viridis")
-            cbar = fig.colorbar(im, ax=ax)
-            cbar.set_label("Metric depth (mm)")
-            ax.set_title("Metric Depth Map")
-            ax.axis("off")
-
-            plt.show()
+        # Save the depth map
+        self.depth_map_from_disparity()
 
 
 
 def main():
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("capture_json", help="decoded .LFR metadata json file")
-    parser.add_argument("calibration_json", help="PlenoptiCam calibrated MLA json file")
+    parser.add_argument("lfr", help="decoded .LFR folder")
     parser.add_argument("--gap", type=float, default=None,
                          help="virtual camera gap G, in px (from PlenoptiCam per-frame output)")
     parser.add_argument("--disparity", type=float, default=None,
@@ -248,8 +336,8 @@ def main():
     args = parser.parse_args()
     
     try:
-        ps = PlenoptisignLFR(args.capture_json, args.calibration_json)
-        ps.update(args.capture_json, args.calibration_json, virtual_cam_gap=args.gap, disparity_val=args.disparity)
+        ps = PlenoptisignLFR(args.lfr)
+        ps.update(args.lfr, virtual_cam_gap=args.gap, disparity_val=args.disparity)
     except KeyboardInterrupt:
         print("Ctrl C recieved. Stopping processes")
 
