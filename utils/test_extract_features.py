@@ -113,16 +113,110 @@ def match_features(des1, des2):
     return good_matches
 
 
+def ransac_filter(matches, kp1, kp2, reproj_thresh=2.0, confidence=0.99):
+    """Keep only the matches consistent with a single epipolar geometry.
+
+    The ratio test compares descriptors only, so it passes matches that look
+    alike but are geometrically impossible (e.g. coral in one frame -> wall in
+    the other). Fitting a fundamental matrix with RANSAC rejects those.
+    """
+    # the 8-point algorithm needs at least 8 correspondences
+    if len(matches) < 8:
+        print(f"[RANSAC] only {len(matches)} matches, need 8+ -- skipping filter")
+        return matches
+
+    pts1 = np.float32([kp1[m.queryIdx].pt for m in matches])
+    pts2 = np.float32([kp2[m.trainIdx].pt for m in matches])
+
+    _, mask = cv2.findFundamentalMat(pts1, pts2, cv2.FM_RANSAC,
+                                     reproj_thresh, confidence)
+
+    # RANSAC can fail to reach consensus, in which case there is nothing to trust
+    if mask is None:
+        print("[RANSAC] no consensus found -- keeping all matches")
+        return matches
+
+    inliers = [m for m, keep in zip(matches, mask.ravel()) if keep]
+    print(f"[RANSAC] {len(inliers)}/{len(matches)} matches are geometrically consistent")
+
+    return inliers
+
+
+def depth_at(depth_map, pt):
+    """Sample a depth map at a keypoint's (subpixel) location.
+
+    Keypoint coords are floats, depth maps are indexed [row, col] = [y, x],
+    so round and clamp to stay inside the array.
+    """
+    x, y = int(round(pt[0])), int(round(pt[1]))
+    y = min(max(y, 0), depth_map.shape[0] - 1)
+    x = min(max(x, 0), depth_map.shape[1] - 1)
+
+    return depth_map[y, x]
+
+
+def filter_kp_by_depth(kp, des, depth_map, dmin, dmax):
+    """Keep only the keypoints whose depth falls inside [dmin, dmax].
+
+    Run before matching, to throw away background (wall, table) keypoints so
+    they never get the chance to form a false match in the first place.
+    """
+    keep = [i for i, k in enumerate(kp) if dmin <= depth_at(depth_map, k.pt) <= dmax]
+
+    kp_filtered = [kp[i] for i in keep]
+    # descriptor rows must be re-indexed with the SAME indices, otherwise each
+    # descriptor no longer corresponds to its keypoint
+    des_filtered = des[keep] if des is not None else None
+
+    print(f"[Depth] kept {len(kp_filtered)}/{len(kp)} keypoints within depth [{dmin}, {dmax}]")
+
+    return kp_filtered, des_filtered
+
+
+def filter_matches_by_depth(matches, kp1, kp2, depth1, depth2, tol=0.01):
+    """Drop matches whose two endpoints disagree on depth.
+
+    The same physical point should sit at a similar depth in both frames, so a
+    large disagreement suggests a false match.
+    """
+    if not matches:
+        return matches
+
+    d1 = np.array([depth_at(depth1, kp1[m.queryIdx].pt) for m in matches])
+    d2 = np.array([depth_at(depth2, kp2[m.trainIdx].pt) for m in matches])
+
+    # PlenoptiCam normalizes each frame's depth.pfm to [0,1] independently, so a
+    # constant per-frame offset survives even for correct matches. Measured ~0.03
+    # between IMG_0152/IMG_0162, which is larger than tol -- subtract it first or
+    # the filter rejects everything.
+    offset = np.median(d1 - d2)
+    resid = np.abs((d1 - d2) - offset)
+
+    inliers = [m for m, r in zip(matches, resid) if r <= tol]
+    print(f"[Depth] {len(inliers)}/{len(matches)} matches agree on depth "
+          f"(tol={tol}, offset={offset:+.4f})")
+
+    return inliers
+
+
 def main():
-    img_names = ["IMG_0152", "IMG_0162"]
+    # IMG_0152"
+    img_names = ["IMG_0159", "IMG_0162"]
     img_list = []
     kp_list = []
     des_list = []
 
 
+    # depth_list = []
+
     for name in img_names:
         img = cv2.imread(f"LFRDatasetExtracted/{name}/thumbnail.png")
         kp, des = extract_features(img, alg="SIFT", show=False)
+
+        # depth map, a 2d array the same HxW as img, one depth per pixel
+        # depth = load_depth(name)
+        # kp, des = filter_kp_by_depth(kp, des, depth, dmin=0.45, dmax=0.52)
+        # depth_list.append(depth)
 
         img_list.append(img)
         kp_list.append(kp)
@@ -130,6 +224,9 @@ def main():
 
     for i in range(len(img_list) - 1):
         good_matches = match_features(des_list[i], des_list[i + 1])
+        good_matches = ransac_filter(good_matches, kp_list[i], kp_list[i + 1])
+        # good_matches = filter_matches_by_depth(good_matches, kp_list[i], kp_list[i + 1],
+        #                                        depth_list[i], depth_list[i + 1], tol=0.01)
 
         show_matches(img_list[i], kp_list[i], img_list[i + 1], kp_list[i + 1], good_matches, img_names[i], img_names[i+1])
 
