@@ -39,9 +39,6 @@ class PlenopticamLFR:
     def _lfr_files(self):
         return sorted(glob.glob(os.path.join(self.input_dir, "*.LFR")))
 
-    def _subdirs(self):
-        return {d for d in glob.glob(os.path.join(self.input_dir, "*")) if os.path.isdir(d)}
-
     def _decode_one(self, lfr_path, calib_tar):
         name = Path(lfr_path).stem
         dst_out = os.path.join(self.output_dir, name)
@@ -50,33 +47,43 @@ class PlenopticamLFR:
             print(f"=== Skipping {name} (already in {dst_out}; set force=True to redo) ===")
             return
 
-        before_dirs = self._subdirs()
+        # PlenoptiCam writes its output next to the .LFR file, at exp_path =
+        # splitext(lfp_path)[0] (see plenopticam/cfg/cfg.py).
+        src_out = os.path.splitext(lfr_path)[0]
 
         print(f"=== Decoding {name} ===")
-        subprocess.run([self.plenopticam, "-f", lfr_path, "-c", calib_tar], check=True)
+        # NOTE: PlenoptiCam v0.9.3's main() returns True, so its entry point runs
+        # sys.exit(True), which exits with status 1 even on success. Its exit code is
+        # therefore not a reliable success signal (failures also exit 1), so we must NOT
+        # use check=True. Success is judged by whether the output folder was produced.
+        subprocess.run([self.plenopticam, "-f", lfr_path, "-c", calib_tar])
 
-        new_dirs = self._subdirs() - before_dirs
-        if len(new_dirs) == 1:
-            src_out = new_dirs.pop()
+        if os.path.isdir(src_out):
             if os.path.isdir(dst_out):
                 shutil.rmtree(dst_out)
             shutil.move(src_out, dst_out)
             print(f"Saved -> {dst_out}")
-        elif not new_dirs:
-            print(f"WARNING: no new output folder appeared in {self.input_dir} for {name}", file=sys.stderr)
         else:
-            print(f"WARNING: multiple new folders appeared for {name}, not moving: {sorted(new_dirs)}", file=sys.stderr)
+            print(f"WARNING: expected output folder {src_out} was not produced for {name}", file=sys.stderr)
 
     def _collect_calibration_json(self):
         calib_out_dir = os.path.join(self.output_dir, "Calibration")
         os.makedirs(calib_out_dir, exist_ok=True)
 
         matches = sorted(glob.glob(os.path.join(self.calib_dir, "**", "mod_*.json"), recursive=True))
-        if matches:
-            shutil.copy2(matches[0], calib_out_dir)
-            print(f"Saved calibration -> {os.path.join(calib_out_dir, os.path.basename(matches[0]))}")
-        else:
+        if not matches:
             print(f"WARNING: no calibration mod_*.json found under {self.calib_dir}", file=sys.stderr)
+            return
+
+        # The same calibration tar is used for every decode, so this file is identical
+        # across runs; skip re-copying it once it's already been collected.
+        dst_file = os.path.join(calib_out_dir, os.path.basename(matches[0]))
+        if os.path.isfile(dst_file) and not self.force:
+            print(f"=== Skipping calibration (already in {dst_file}; set force=True to redo) ===")
+            return
+
+        shutil.copy2(matches[0], calib_out_dir)
+        print(f"Saved calibration -> {dst_file}")
 
     def run(self):
         calib_tar = self._find_calibration_tar()
