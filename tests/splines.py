@@ -1,12 +1,30 @@
+import sys
+from pathlib import Path
+
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import interpolate
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from utils.utils import Point
+
 CURVE_DENSITY = 15
 
 
-def show_spline(x_coords, y_coords, z_coords):
+def show_spline(points):
     """List of x y z points"""
+
+    x_coords = []
+    y_coords = []
+    z_coords = []
+
+    for p in points:
+        for i in range(len(p.pos_history)):    
+            x_coords.append(p.pos_history[i][0])
+            y_coords.append(p.pos_history[i][1])
+            z_coords.append(p.pos_history[i][2])
+
+    print(x_coords)
 
     print(f"Generating B-spline of {CURVE_DENSITY} curve density")
     
@@ -40,12 +58,26 @@ def show_spline(x_coords, y_coords, z_coords):
 
 
 def main():
-    x_coords = np.array([0.0, 1.0, 2.5, 3.0, 4.5, 6.0])
-    y_coords = np.array([0.0, 2.5, 1.0, 4.0, 2.0, 5.0])
-    z_coords = np.array([0.0, 1.0, 3.0, 2.5, 4.5, 6.0])
+    x_coords = [0.0, 1.0, 2.5, 3.0, 4.5, 6.0]
+    y_coords = [0.0, 2.5, 1.0, 4.0, 2.0, 5.0]
+    z_coords = [0.0, 1.0, 3.0, 2.5, 4.5, 6.0]
 
+    viewed_points: list[Point] = []
 
-    show_spline(x_coords, y_coords, z_coords)
+    counter = 0
+    for x, y , z in zip (x_coords, y_coords, z_coords):
+        p = Point(
+            idx=counter, 
+            x=x, 
+            y=y, 
+            z=z, 
+            pos_history=[(x,y,z)]
+        )
+        counter += 1
+
+        viewed_points.append(p)
+
+    show_spline(viewed_points)
 
 
 

@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 @dataclass
 class Point:
@@ -6,4 +6,4 @@ class Point:
     x: float
     y: float
     z: float
-    pos_history: list[float]
+    pos_history: list[tuple[float,float,float]]
