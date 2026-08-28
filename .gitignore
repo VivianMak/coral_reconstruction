@@ -1,14 +1,9 @@
 # Virtual environments
-.env
 .venv
-env/
-venv/
+
 
 # Data
 ARCHIVED/
 LFRDataset/
 LFRDatasetExtracted/
 PCDDataset/
-
-# Jupyter notebooks
-.ipynb
