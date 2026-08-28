@@ -44,7 +44,6 @@ def voxel_downsample(points, voxel_size=VOXEL_SIZE, show=False):
     nodes = np.array([np.mean(bucket, axis=0) for bucket in buckets.values()])
 
     print(f"Downsampled {len(points)} points -> {len(nodes)} voxel nodes (voxel_size={VOXEL_SIZE})")
-    # return nodes
 
     if show:
         # 3. Create the 3D plot
@@ -69,6 +68,7 @@ def voxel_downsample(points, voxel_size=VOXEL_SIZE, show=False):
         plt.tight_layout()
         plt.show()
 
+    return nodes
 
 
 
@@ -124,7 +124,7 @@ def main():
     voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(pcd, voxel_size=VOXEL_SIZE)
 
     o3d.visualization.draw_geometries(
-        [pcd, voxel_grid, voxel_wireframe(voxel_grid)],
+        [points, pcd, voxel_grid, voxel_wireframe(voxel_grid)],
         window_name=f'Voxel Grid (voxel_size={VOXEL_SIZE})',
     )
 

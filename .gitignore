@@ -7,3 +7,8 @@ LFRDatasetExtracted/
 PCDDataset/
 
 data/
+# Jupyter notebooks
+.ipynb
+
+__pycache__/
+docs/
