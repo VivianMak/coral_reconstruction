@@ -9,12 +9,15 @@ import matplotlib.pyplot as plt
 from plenoptisign.mainclass import MainClass
 from plenoptisign.constants import ABBS, VALS
 
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+
 DEFAULTS = dict(zip(ABBS, VALS))
 
 SHOW_VALS = False
 SHOW_DEPTHS = True
 
-EXTRACTED_DIR = "LFRDatasetExtracted/"
+EXTRACTED_DIR = "data/LFRDatasetExtracted/"
 
 
 class PlenoptisignLFR:
@@ -27,7 +30,7 @@ class PlenoptisignLFR:
        self.lfr = lfr
 
        # Same calibration across all images
-       self.calibrate_json = EXTRACTED_DIR + "Calibration/mod_0008.json"
+       self.calibrate_json = EXTRACTED_DIR + "Calibration/mod_0033.json"
 
        # Per LFR
        self.capture_json = os.path.join(EXTRACTED_DIR, lfr, f"{lfr}.json")
@@ -219,25 +222,31 @@ class PlenoptisignLFR:
             if os.path.isfile(self.thumbnail_file):
                 fig, (ax_orig, ax_depth) = plt.subplots(1, 2, figsize=(14, 6))
                 ax_orig.imshow(plt.imread(self.thumbnail_file))
-                ax_orig.set_title("Original")
+                # ax_orig.set_title("Original")
                 ax_orig.axis("off")
             else:
                 print(f"Thumbnail not found at {self.thumbnail_file}; showing depth map only")
-                fig, ax_depth = plt.subplots(figsize=(8, 6))
+                # fig, ax_depth = plt.subplots(figsize=(8, 6))
 
             vmin, vmax = np.percentile(depth_map, [2, 98])
             # vmin, vmax = 43, 44
             im = ax_depth.imshow(depth_map, cmap="viridis", vmin=vmin, vmax=vmax)
-            cbar = fig.colorbar(im, ax=ax_depth)
+
+            divider = make_axes_locatable(ax_depth)
+            cax = divider.append_axes("right", size="5%", pad=0.1)
+            cbar = fig.colorbar(im, cax=cax)
             cbar.set_label("Metric depth (mm)")
-            ax_depth.set_title("Metric Depth Map")
+
+            # cbar = fig.colorbar(im, ax=ax_depth)
+            # cbar.set_label("Metric depth (mm)")
+            # ax_depth.set_title("Metric Depth Map")
             ax_depth.axis("off")
 
             docs_dir = os.path.join(EXTRACTED_DIR, self.lfr, "docs")
             os.makedirs(docs_dir, exist_ok=True)
             fig.savefig(os.path.join(docs_dir, "metric_depth.png"), dpi=150, bbox_inches="tight")
 
-            self.depth_pc()
+            # self.depth_pc()
 
             plt.show()
 

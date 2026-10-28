@@ -17,7 +17,7 @@ class PlenopticamLFR:
                                 ->  LFRDatasetExtracted/Calibration/
     """
 
-    def __init__(self, input_dir="LFRDataset", output_dir=None, force=False):
+    def __init__(self, input_dir="data/LFRDataset", output_dir=None, force=False):
         self.input_dir = input_dir
         self.calib_dir = os.path.join(input_dir, "Calibration")
         self.output_dir = output_dir or f"{input_dir}Extracted"
@@ -103,7 +103,7 @@ class PlenopticamLFR:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input-dir", default="LFRDataset")
+    parser.add_argument("--input-dir", default="data/LFRDataset")
     parser.add_argument("--output-dir", default=None)
     parser.add_argument("--force", default=False, action="store_true", help="re-decode files already extracted")
     args = parser.parse_args()

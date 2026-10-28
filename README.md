@@ -23,8 +23,13 @@ This research project aims to answer the question: <u>__“Through scientific ex
 - https://github.com/hahnec/plenopticam
 
 ```sh
-pip3 install plenopticam
-plenopticam -h
+# Setting up plenopticam/workspace
+python --version    # Python 3.10
+sudo apt install python3-tk
+pip install -r requirements.txt
+plenopticam -h      # Check package 
+```
+```sh
 ./decode_lfr.sh
 ```
 ```
