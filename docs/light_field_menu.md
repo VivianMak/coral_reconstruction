@@ -21,3 +21,9 @@
     - What does edge detection across depths look like?
     - Combining edges to a 3d edge map
     - How to pick key features? Can we use existing algorithms?
+
+
+
+
+- how does mediapipe  limb / linear asumption
+- tatum robotics limbs
