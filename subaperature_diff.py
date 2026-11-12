@@ -12,6 +12,7 @@ from PIL import Image
 
 import cv2
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 from lib import paths
 
@@ -24,33 +25,95 @@ view_paths = sorted(glob.glob(os.path.join(SUBAPERATURE_DIR, "*.png")))
 H = 431
 W = 620
 
+VIEWS = 13
+
 
 """
 Given two images, return a disparity map via rgb channel
 """
-def compare_imgs(img1, img2):
-
+def compare_imgs(img1, img2, threshold=None):
+    
+    # Get grayscale image difference (0-255)
     diff = cv2.absdiff(img1, img2)
-    gray_diff = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
+    gray_diff = cv2.cvtColor(diff, cv2.COLOR_RGB2GRAY)
 
-    # _, thresh = cv2.threshold(gray_diff, 30, 255, cv2.THRESH_BINARY)
+    # Find intersection of pixels that aren't black
+    valid = (img1.max(axis=2) > 0) & (img2.max(axis=2) > 0) #431×620
 
-    # gray_diff = (gray_diff > 30).astype('uint8') * 255
+    # Apply pixel dif to valid pixels - Ignore vignetting
+    pixel_diff = gray_diff[valid]
 
-    return gray_diff
+    # Plot valid pixels
+    # plt.figure()
+    # plt.hist(pixel_diff, bins=256, range=(0, 255))
+    # plt.yscale('log')
+    # plt.xlabel('Pixel value (0-255)')
+    # plt.ylabel('Pixel count (log)')
+    # plt.title('Pixel Dif histogram')
+    # plt.show()
 
-    image_dif = np.zeros((H, W, 3), dtype=np.uint8)
+   
+    # Quantify the results  
+    mean_diff = pixel_diff.mean()   # Average pixel change
 
-    # for each bgr channel, subtract img2 from img1
-    for i in range(3):
-        image_dif[:, :, i] = np.abs((img1[:, :, i].astype(np.int16) - img1[:, :, i].astype(np.int16)))
+    if threshold is not None:
+        percent_change = 100 * (pixel_diff > threshold).mean() / 255
+    else:
+        percent_change = 100 * pixel_diff.mean() / 255  # use every pixel
 
-    return image_dif
+    results = [
+        percent_change,
+        mean_diff
+    ]
+
+    print(f"Percent Change: {percent_change:.3f} %")
+    print(f"Mean Change: {mean_diff:.3f} px")
+
+    return gray_diff, results
+
+
+"""
+Given a 13 by 13 view, create a heatmap of the pixel disparity between images
+"""
+def create_heatmap():
+
+    # Create 2d array of percentage dif for 13 by 13
+    percentages = np.zeros((13, 13), dtype=float)
+
+    for i in range(VIEWS):
+        for j in range(VIEWS):
+
+            # Convert paths to rgb images
+            img1 = cv2.imread(view_paths[i])
+            img2 = cv2.imread(view_paths[j])
+            
+            img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2RGB)
+            img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2RGB)
+
+            # Compare images
+            _, results = compare_imgs(img1, img2)
+
+            percentages[i, j] = results[0]
+
+
+    # plt.imshow(percentages, cmap="inferno")
+    # plt.colorbar(label="Value")
+
+    sns.heatmap(percentages, annot=True, fmt=".2f", cmap="coolwarm")
+   
+    plt.title("Heatmap of Pixel Change Across 13 by 13")
+    plt.show()
+
+    return None
+
 
 
 def main():
 
-    print("Total Viewpoints:", len(view_paths))
+    # print("Total Viewpoints:", len(view_paths))
+
+    # create_heatmap()
+    
 
     n = 3
 
@@ -61,29 +124,28 @@ def main():
     img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2RGB)
     img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2RGB)
 
-    # get height and witdth
-    # h, w, d = img1.shape[:3]
-
     # Compare difference in two images
-    # build a heatmap
-    img = compare_imgs(img1, img2)
+    dif, results = compare_imgs(img1, img2)
 
-    binary_diff = (img > 30).astype(np.int16) * 255
 
     # Make subplot for comparison
+    images = [img1, img2, dif]
 
-    fig, axes = plt.subplots(2, 2, figsize=(15, 5))
+    fig, axes = plt.subplots(1,3)
 
-    images = [img1, img2, img, binary_diff]
-    titles = ['Image 1', 'Image 2', 'Image Dif', 'Binary Dif']
+    titles = ['Image 1', 'Image 2', 'Image Dif', 'Overlapped']
 
-    for ax, img, title in zip(axes, images, titles):
-        print(title)
-        ax.imshow(img, cmap='gray' if img.ndim == 2 else None)
+    for ax, im, title in zip(axes.flat, images, titles):
+        ax.imshow(im, cmap='gray' if im.ndim == 2 else None)
         ax.set_title(title)
-        ax.axis('off')  # Hide axis ticks and labels
+        # ax.axis('off')  # Hide axis ticks and labels
 
+    
     plt.tight_layout()
+
+    subplot_title = ""
+    cv2.imwrite(os.path.join(paths.IMG_DOC, f"{subplot_title}.png"), ax)
+    
     plt.show()
 
     return None
