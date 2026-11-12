@@ -42,6 +42,27 @@ The widest FOV is 13 by 13 images wide. For inputs higher than 13, it'll just be
 User size (21 px) is larger than micro image size and reduced to 13 pixels.
 ```
 
+So using the 13 by 13 grid, I sampled and quantified the pixel differences between a set of images, testing sub aperatures that are closer and further apart. __We notice that subaperatures further apart result in a higher pixel change, giving us more information."__
+
+For the far subaperatures:
+
+- Percent Change: 5.649 %
+- Mean Change: 14.404 px
+
+![](images/far_subaperature.png)
+
+
+For the close subaperatures:
+
+- Percent Change: 2.826 %
+- Mean Change: 7.207 px
+
+![](images/close_subaperature.png)
+
+
+Now, I wanted to see the change in pixels of different sub aperatures across the entire 13 by 13 grid. It makes sense that the diagonal represents and identical image and the corners of the heatmap show the pixel difference.
+
+![](images/subaperature_heatmap.png)
 
 
 ## 2. Extracting Key Points

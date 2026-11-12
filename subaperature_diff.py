@@ -63,7 +63,8 @@ def compare_imgs(img1, img2, threshold=None):
 
     results = [
         percent_change,
-        mean_diff
+        mean_diff,
+        pixel_diff
     ]
 
     print(f"Percent Change: {percent_change:.3f} %")
@@ -100,9 +101,16 @@ def create_heatmap():
     # plt.colorbar(label="Value")
 
     sns.heatmap(percentages, annot=True, fmt=".2f", cmap="coolwarm")
-   
-    plt.title("Heatmap of Pixel Change Across 13 by 13")
+    plt.title("Heatmap of ALL Pixel Change Across 13 by 13")
+    
+    plt.savefig(
+        os.path.join(paths.IMG_DOC, "subaperature_heatmap.png"), 
+        dpi=150, 
+        bbox_inches='tight'
+    )
+
     plt.show()
+    
 
     return None
 
@@ -112,7 +120,9 @@ def main():
 
     # print("Total Viewpoints:", len(view_paths))
 
-    # create_heatmap()
+    create_heatmap()
+
+    return None
     
 
     n = 3
@@ -131,7 +141,7 @@ def main():
     # Make subplot for comparison
     images = [img1, img2, dif]
 
-    fig, axes = plt.subplots(1,3)
+    fig, axes = plt.subplots(1,3, figsize=(14.2, 3.9))
 
     titles = ['Image 1', 'Image 2', 'Image Dif', 'Overlapped']
 
@@ -140,23 +150,14 @@ def main():
         ax.set_title(title)
         # ax.axis('off')  # Hide axis ticks and labels
 
+    subplot_title = "Pixel Diff in Subaperature (CLOSE)"
     
     plt.tight_layout()
-
-    subplot_title = ""
-    cv2.imwrite(os.path.join(paths.IMG_DOC, f"{subplot_title}.png"), ax)
+    fig.suptitle(subplot_title + " [img 3, 4]")
+    fig.savefig(os.path.join(paths.IMG_DOC, f"{subplot_title}.png"), dpi=150, bbox_inches='tight')
     
     plt.show()
 
-    return None
-
-    if img is None:
-        print("Error: Could not load image.")
-    else:
-        cv2.imshow("Image Window", img)
-        # cv2.imwrite(os.path.join(paths.IMG_DOC, "BGR_diff.png"), img)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
 
 
 if __name__=="__main__":
