@@ -1,15 +1,10 @@
 """
-Workflow:
-
-LFR/XRAW file ──▶ [decode + 4D align] ──▶ sub-aperture image grid ──▶ [depth est.] ──▶ depth map
-   (camera)         PlenoptiCam              NxN viewpoint array       you write this    (float, metres-ish)
-                    + calibration
+Main
 """
 
 import cv2
 import numpy as np
 
-from PlenopticamLFR import PlenopticamLFR       # to decode LFRs
 from PlenoptisignLFR import PlenoptisignLFR     # to calculate metric depth
 
 class LytroDepth:
