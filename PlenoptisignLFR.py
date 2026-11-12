@@ -11,13 +11,13 @@ from plenoptisign.constants import ABBS, VALS
 
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+from lib import paths
+
 
 DEFAULTS = dict(zip(ABBS, VALS))
 
 SHOW_VALS = False
 SHOW_DEPTHS = True
-
-EXTRACTED_DIR = "data/LFRDatasetExtracted/"
 
 
 class PlenoptisignLFR:
@@ -27,15 +27,15 @@ class PlenoptisignLFR:
        self.sources = {}
        self.results = {}
 
-       self.lfr = lfr
+       self.lfr = os.path.join(paths.DATA_EXTRACTED_DIR, lfr)
 
        # Same calibration across all images
-       self.calibrate_json = EXTRACTED_DIR + "Calibration/mod_0033.json"
+       self.calibrate_json = os.path.join(paths.DATA_EXTRACTED_DIR, "Calibration", "mod_0033.json")
 
        # Per LFR
-       self.capture_json = os.path.join(EXTRACTED_DIR, lfr, f"{lfr}.json")
-       self.disparity_file = os.path.join(EXTRACTED_DIR, lfr, "depth.pfm")
-       self.thumbnail_file = os.path.join(EXTRACTED_DIR, lfr, "thumbnail.png")
+       self.capture_json = os.path.join(paths.DATA_EXTRACTED_DIR, lfr, f"{lfr}.json")
+       self.disparity_file = os.path.join(paths.DATA_EXTRACTED_DIR, lfr, "depth.pfm")
+       self.thumbnail_file = os.path.join(paths.DATA_EXTRACTED_DIR, lfr, "thumbnail.png")
 
        self.build_params()
 
@@ -242,21 +242,22 @@ class PlenoptisignLFR:
             # ax_depth.set_title("Metric Depth Map")
             ax_depth.axis("off")
 
-            docs_dir = os.path.join(EXTRACTED_DIR, self.lfr, "docs")
+            docs_dir = os.path.join(paths.DATA_EXTRACTED_DIR, self.lfr, "docs")
             os.makedirs(docs_dir, exist_ok=True)
             fig.savefig(os.path.join(docs_dir, "metric_depth.png"), dpi=150, bbox_inches="tight")
 
-            # self.depth_pc()
+            self.depth_pc(min_depth=35, max_depth=36.8)
 
             plt.show()
 
-    def depth_pc(self):
+    def depth_pc(self, min_depth=None, max_depth=None):
         """Display a 3D point cloud of the METRIC depth map. Sensor-plane
         pixel coords are back-projected to object space via similar
         triangles (pinhole approximation, using the sourced pixel pitch
         and main-lens focal length), then colored from the thumbnail when
         its resolution matches depth.pfm (true for the PlenoptiCam output
-        used here)."""
+        used here). Only points with min_depth <= Z <= max_depth (mm) are
+        kept; either bound may be None to leave that side open."""
 
         if not hasattr(self, "depth_map"):
             raise RuntimeError("depth_pc() requires depth_map_from_disparity() to run first")
@@ -284,14 +285,27 @@ class PlenoptisignLFR:
             if thumb.shape[:2] == depth_map.shape:
                 colors = thumb / thumb.max() if thumb.max() > 1 else thumb
 
-        # subsample so the scatter stays responsive
-        max_points = 60000
-        step = max(1, int(np.sqrt((height_px * width_px) / max_points)))
+        # keep only points inside the requested depth band
+        keep = np.isfinite(z_mm)
+        if min_depth is not None:
+            keep &= z_mm >= min_depth
+        if max_depth is not None:
+            keep &= z_mm <= max_depth
 
-        x_mm = x_mm[::step, ::step].ravel()
-        y_mm = y_mm[::step, ::step].ravel()
-        z_sub = z_mm[::step, ::step].ravel()
-        c = colors[::step, ::step].reshape(-1, 3) if colors is not None else z_sub
+        if not keep.any():
+            print(f"No points within depth range [{min_depth}, {max_depth}] mm "
+                  f"(depth map spans {np.nanmin(z_mm):.3f}-{np.nanmax(z_mm):.3f} mm); "
+                  "skipping point cloud")
+            return None
+
+        # subsample the kept points so the scatter stays responsive
+        max_points = 60000
+        step = max(1, int(np.ceil(keep.sum() / max_points)))
+
+        x_mm = x_mm[keep][::step]
+        y_mm = y_mm[keep][::step]
+        z_sub = z_mm[keep][::step]
+        c = colors[keep][::step] if colors is not None else z_sub
 
         fig = plt.figure(figsize=(8, 7))
         ax = fig.add_subplot(111, projection="3d")
@@ -300,11 +314,16 @@ class PlenoptisignLFR:
         ax.set_xlabel("X (mm)")
         ax.set_ylabel("Y (mm)")
         ax.set_zlabel("Depth Z (mm)")
-        ax.set_title("Metric Depth Point Cloud")
+        title = "Metric Depth Point Cloud"
+        if min_depth is not None or max_depth is not None:
+            lo = f"{min_depth:g}" if min_depth is not None else "-inf"
+            hi = f"{max_depth:g}" if max_depth is not None else "inf"
+            title += f" ({lo} to {hi} mm)"
+        ax.set_title(title)
         if colors is None:
             fig.colorbar(sc, ax=ax, label="Metric depth (mm)")
 
-        docs_dir = os.path.join(EXTRACTED_DIR, self.lfr, "docs")
+        docs_dir = os.path.join(paths.DATA_EXTRACTED_DIR, self.lfr, "docs")
         os.makedirs(docs_dir, exist_ok=True)
         fig.savefig(os.path.join(docs_dir, "point_cloud.png"), dpi=150, bbox_inches="tight")
 
@@ -316,9 +335,9 @@ class PlenoptisignLFR:
         __init__); the calibration json is shared across all LFRs."""
 
         self.lfr = lfr
-        self.capture_json = os.path.join(EXTRACTED_DIR, lfr, f"{lfr}.json")
-        self.disparity_file = os.path.join(EXTRACTED_DIR, lfr, "depth.pfm")
-        self.thumbnail_file = os.path.join(EXTRACTED_DIR, lfr, "thumbnail.png")
+        self.capture_json = os.path.join(paths.DATA_EXTRACTED_DIR, lfr, f"{lfr}.json")
+        self.disparity_file = os.path.join(paths.DATA_EXTRACTED_DIR, lfr, "depth.pfm")
+        self.thumbnail_file = os.path.join(paths.DATA_EXTRACTED_DIR, lfr, "thumbnail.png")
 
         # Edit the per frame metadata
         self.add_params(virtual_cam_gap, disparity_val)
